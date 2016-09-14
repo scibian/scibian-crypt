@@ -1,0 +1,2 @@
+scibian-crypt-changepass	/usr/sbin
+12_linux_scibian_crypt /etc/grub.d

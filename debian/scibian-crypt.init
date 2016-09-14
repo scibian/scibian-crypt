@@ -1,0 +1,50 @@
+#!/bin/sh
+
+### BEGIN INIT INFO
+# Provides:          scibian-crypt
+# Required-Start:
+# Should-Start:
+# Required-Stop:
+# X-Start-Before:
+# Default-Start:
+# Default-Stop:
+# X-Interactive:
+# Short-Description: Boot-time password changer for crypt disks
+### END INIT INFO
+
+set -e
+
+FLAG=/var/lib/scibian/scibian-crypt-init
+
+case "$1" in
+	start)
+
+	if ([ -e "$FLAG" ] || grep -q scibian-crypt-changepass /proc/cmdline) && (tty | egrep -q '^(/dev/tty|/dev/console)')
+	then
+		modprobe -qb dm-mod
+		modprobe -qb dm-crypt
+
+		while true ; do
+			if [ -b /dev/mapper/*-local ] ; then
+				break
+			fi
+			echo "waiting for the encrypted disk to appear..."
+			sleep 1
+		done
+
+		# drop the flag if the password change is successful
+		if /usr/sbin/scibian-crypt-changepass
+		then
+			rm -f "$FLAG"
+		fi
+	fi
+	;;
+	stop|reload|restart|force-reload)
+	;;
+	*)
+	echo "Usage: $0 {start|stop|restart|force-reload}" >&2
+	exit 1
+	;;
+esac
+
+exit 0

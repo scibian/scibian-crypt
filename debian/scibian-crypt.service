@@ -1,0 +1,17 @@
+[Unit]
+SourcePath=/etc/init.d/scibian-crypt
+Description=Scibian Crypt
+Before=systemd-cryptsetup@encrypted_local.service
+After=systemd-remount-fs.service
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+ExecStart=/etc/init.d/scibian-crypt start
+ExecStop=/etc/init.d/scibian-crypt stop
+Restart=no
+StandardInput=tty
+TTYPath=/dev/tty1
+
+[Install]
+WantedBy=default.target

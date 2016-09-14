@@ -1,0 +1,12 @@
+Source: scibian-crypt
+Section: admin
+Priority: extra
+Maintainer: Scibian Packaging Team <packaging@scibian.org>
+Build-Depends: debhelper (>= 7.0.50~), dh-systemd
+Standards-Version: 3.9.3
+
+Package: scibian-crypt
+Architecture: all
+Depends: cryptsetup, makepasswd, grub-common
+Description: User disk encryption helper tools
+ Helper tools for Scibian's disk encryption support

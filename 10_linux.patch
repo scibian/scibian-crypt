@@ -1,0 +1,14 @@
+--- /etc/grub.d/10_linux	2015-03-23 17:33:03.000000000 +0100
++++ /etc/grub.d/12_linux_scibian_crypt	2015-07-16 17:33:21.921956568 +0200
+@@ -328,8 +328,9 @@
+   fi
+ 
+   if [ "x$is_top_level" = xtrue ] && [ "x${GRUB_DISABLE_SUBMENU}" != xy ]; then
+-    linux_entry "${OS}" "${version}" simple \
+-    "${GRUB_CMDLINE_LINUX} ${GRUB_CMDLINE_LINUX_DEFAULT}"
++    linux_entry "disk encryption password change" "${version}" simple \
++    "${GRUB_CMDLINE_LINUX} ${GRUB_CMDLINE_LINUX_DEFAULT} scibian-crypt-changepass"
++    break
+ 
+     submenu_indentation="$grub_tab"
+     

@@ -1,0 +1,5 @@
+scibian-crypt (8.0) jessie; urgency=medium
+
+  * Initial release of scibian-crypt
+
+ -- Scibian Packaging Team <packaging@scibian.org>  Wed, 14 Sep 2016 15:01:21 +0200

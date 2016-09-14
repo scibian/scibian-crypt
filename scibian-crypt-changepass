@@ -1,0 +1,162 @@
+#!/bin/bash
+CRYPT_MNT=/local00
+KEYFILE=/etc/scibian_local00.key
+
+# basic passphrase policy check
+check_ppolicy()
+{
+	local passfile
+	passfile=$1
+	length=$(wc -m $passfile|cut -d ' ' -f1)
+	if [ $length -lt 8 ]
+	then
+		echo "The passphrase must at least be 8 characters long"
+		return 1
+	fi	
+
+	return 0
+}
+
+# find the device
+device=$(awk '($3 == "'$KEYFILE'") || ($3 == "none") { print $2; exit;}' /etc/crypttab)
+if [ "${device:0:5}" == "UUID=" ]
+then
+	device=/dev/disk/by-uuid/${device:5}
+fi
+
+echo "Password change for $CRYPT_MNT"
+
+# check if either one of slot 0 or 1 is empty, for storing the new key
+emptyslot=$(cryptsetup luksDump $device|awk '/Key Slot (0|1): DISABLED/ {gsub(":", "", $3);print $3;exit;}')
+if [ -z "$emptyslot" ]
+then
+	echo "The device already has two user passphrases, can not add a third"
+	exit 1
+fi
+if [ $emptyslot == 0 ]
+then
+	usedslot="1"
+else
+	usedslot="0"
+fi
+
+# prevent others from reading the temp files
+umask 0066
+
+passfile=$(tempfile)
+newpassfile=$(tempfile)
+newpassfile2=$(tempfile)
+
+# if $KEYFILE doesn't exist we need the user's passphrase
+if [ ! -e $KEYFILE ]
+then
+	echo "Veuillez entrer le mot de passe de chiffrement actuel (ne sera pas affiché) (appuyez sur entrée pour continuer) :"
+	echo "Current passphrase (it won't be displayed, press enter to continue): "
+	ok=0
+	while [ $ok -ne 1 ]
+	do
+		/lib/cryptsetup/askpass "" > $passfile
+		if [ ! -s $passfile ]
+		then
+			echo "Password left unchanged"
+			exit 1
+		fi
+
+
+		# attempt to open the device to check the passphrase
+		cryptsetup luksOpen $device scibian_crypt < $passfile
+		if [ $? -eq 0 ]
+		then
+			ok=1
+			cryptsetup luksClose scibian_crypt
+		else
+			echo "The passphrase is incorrect, please try again: "
+		fi
+	done
+else
+	# key file present, probably the first boot
+	echo
+	echo "First boot - encryption passphrase setup"
+	echo
+	echo " / \\  Your data is now going to be protected by encrypting the storage device"
+	echo "/ ! \\ An encryption key, a passphrase, needs to be setup"
+	echo "----- Not setting up a passphrase allows your data to be compromised"
+	echo "      in case of theft of your computer"
+	echo 
+	echo " Press enter to setup your data protection passphrase"
+	echo 
+	echo " If you prefer not to set it up right now, press 'q' and press enter."
+	read out
+	if [ "$out" = "q" ]
+	then
+		echo " / \\  Beware, your storage device has not been protected"
+		echo "/ ! \\ You can setup a passphrase upon next boot"
+		echo "----- "
+		echo " Press enter to continue"
+		read
+		exit 1
+	fi
+fi
+
+ok=0
+while [ $ok -ne 1 ]
+do
+	echo "Enter the new password (it won't be displayed, minimum 8 characters): "
+	/lib/cryptsetup/askpass "" > $newpassfile
+	echo "Repeat the new password (it won't be displayed): "
+	/lib/cryptsetup/askpass "" > $newpassfile2
+
+	diff -q $newpassfile $newpassfile2 > /dev/null
+	if [ $? -ne 0 ]
+	then
+		echo "The password and the confirmation don't match"
+	else
+		if ! check_ppolicy $newpassfile
+		then
+			echo "The password is not compliant to the password policy"
+		else
+			ok=1
+		fi
+	fi
+	shred -u $newpassfile2
+done
+
+echo -n "Adding the new encryption key ... "
+if [ -e $KEYFILE ]
+then
+	cryptsetup luksAddKey -S $emptyslot $device --key-file $KEYFILE < $newpassfile
+	ret=$?
+	# disable the key file
+	sed -i 's;'$KEYFILE';none;' /etc/crypttab
+else
+	# add a newline at the end of passfile to pass "oldpass\nnewpass" to cryptsetup
+	echo >> $passfile
+	cat $passfile $newpassfile | cryptsetup luksAddKey -S $emptyslot $device
+	ret=$?
+	shred -u $passfile
+fi
+
+if [ $ret -ne 0 ]
+then
+	echo "Could not add the new key."
+	shred -u $newpassfile
+	exit 1
+fi
+echo "OK"
+
+echo -n "Deleting the previous encryption key ... "
+cryptsetup luksKillSlot $device $usedslot < $newpassfile
+ret=$?
+shred -u $newpassfile
+
+if [ $ret -ne 0 ]
+then
+	echo "Could not remove the previous key"
+else
+	echo "OK"
+fi
+
+if [ -e $KEYFILE ]
+then
+	shred -u $KEYFILE
+fi
